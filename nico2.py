@@ -2,11 +2,20 @@ import requests
 import json
 import bs4
 import m3u8
+import threading
+import time
 
 class nico2py():
 
-    def getVideo( self, smUrl ):
+    def __init__( self ):
 
+        #スレッド情報
+        self.started   = threading.Event()
+        self.threadDmc = threading.Thread()
+        self.threadSml = threading.Thread()
+
+    def getVideo( self, smUrl ):
+        
         #動画ページのhtmlを取得
         resSm = requests.post( smUrl )
         cookies = resSm.cookies.get_dict()
@@ -19,11 +28,18 @@ class nico2py():
         api_data = json.loads( js_i_w_data[0].get("data-api-data") )
         self.__dumpJson( "dl_datas/data-api-data.json", api_data )
 
+        self.threadDmc = threading.Thread( target=self.__sessionDmc, args=( api_data ) )
+        self.threadSml = threading.Thread( target=self.__sessionSmile, args=(api_data, cookies ) )
+
         #smileサーバー(旧方式)かdmcサーバー(新方式)を選択
         if api_data["video"]["dmcInfo"] == None:
-            self.__sessionSmile( api_data, cookies )
+            self.threadSml.start()
         else:
-            self.__sessionDmc( api_data )
+            self.threadDmc.start()
+        
+        #読み込む分が生成される待ち時間
+        time.sleep( 1 )
+        return "data.mp4"
             
     def __sessionDmc( self, api_data ):
         
@@ -120,32 +136,26 @@ class nico2py():
         #取得データサイズ設定
         rhead = dict()
         addSize = 100000
-        nowlen = addSize
-        rhead["Range"] = "bytes=0-" + str(nowlen)
+        rhead["Range"] = "bytes=0-10"
    
         #1回目データ取得
         fp = open("data.mp4","wb+")
         res:requests.Response = requests.get( smileUrl, headers=rhead, cookies=cookie )
-        fp.write(res.content)
-        fp.close()
-        
-        #全体サイズ取得
-        length = res.headers["Content-Range"].split("/")[1]
 
+        #全体サイズ取得
+        length = int(res.headers["Content-Range"].split("/")[1])
 
         #全取得までは繰り返し
-        while int(nowlen) <= int(length):
-            fp = open("data.mp4","wb+")
-            nowlen += addSize
-            rhead["Range"] = "bytes=" + res.headers["Content-Length"] + "-" + str(nowlen)
+        for size in range( 0, length, addSize ):
 
-            res:requests.Response = requests.get( smileUrl, headers=rhead, cookies=cookie )
+            rhead["Range"] = "bytes={0}-{1}".format( size, size + addSize -1 )
+            res = requests.get( smileUrl,  headers=rhead, cookies=cookie )
+            test_data += res.content
             fp.write(res.content)
-            fp = open("data.mp4","wb+")
-            per = int(nowlen) / int(length)
-            time_elapsed = res.elapsed.total_seconds()
-            print( str(nowlen) + " / " + str(length) + " : " + "{:.0%}".format(per) + ' 応答速度:', time_elapsed )
-   
+            print( "{0} / {1} : {2:.0%}".format( size + addSize -1, length, (size + addSize -1)/length ) )
+    
+        fp.close()
+
     def __dumpJson( self, file, jdata ):
         fp = open( file, "w" )
         json.dump( jdata, fp, indent=4 )
@@ -199,5 +209,13 @@ class nico2py():
 
         return ret
 
-nc = nico2py()
-nc.getVideo( "https://www.nicovideo.jp/watch/sm3371266" )
+    def __del__( self ):
+
+        #ダウンロードスレッドを終了
+        self.started.set()
+        self.threadSml.isAlive = False
+        self.threadDmc.isAlive = False
+        self.threadSml.join()
+        self.threadDmc.join()
+        pass
+
