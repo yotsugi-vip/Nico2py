@@ -1,0 +1,61 @@
+{
+    "session": {
+        "recipe_id": "",
+        "content_id": "",
+        "content_type": "",
+        "content_src_id_sets": [
+            {
+                "content_src_ids": [
+                    {
+                        "src_id_to_mux": {
+                            "video_src_ids": [
+                                ""
+                            ],
+                            "audio_src_ids": [
+                                ""
+                            ]
+                        }
+                    }
+                ]
+            }
+        ],
+        "timing_constraint": "",
+        "keep_method": {
+            "heartbeat": {
+                "lifetime": 0
+            }
+        },
+        "protocol": {
+            "name": "",
+            "parameters": {
+                "http_parameters": {
+                    "parameters": {
+                        "hls_parameters": {
+                            "use_well_known_port": "",
+                            "use_ssl": "",
+                            "transfer_preset": "standard2",
+                            "segment_duration": 6000
+                        }
+                    }
+                }
+            }
+        },
+        "content_uri": "",
+        "session_operation_auth": {
+            "session_operation_auth_by_signature": {
+                "token": "",
+                "signature": ""
+            }
+        },
+        "content_auth": {
+            "auth_type": "",
+            "content_key_timeout": 0,
+            "service_id": "",
+            "service_user_id": ""
+        },
+        "client_info": {
+            "player_id": ""
+        },
+        "priority": 0
+    }
+}
