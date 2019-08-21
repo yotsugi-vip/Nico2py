@@ -5,21 +5,40 @@ import m3u8
 import threading
 import time
 import os
+import sys
+import time
 
 class nico2py():
 
     def __init__( self ):
 
         #スレッド情報
-        self.started   = threading.Event()
-        self.threadDmc = threading.Thread()
-        self.threadSml = threading.Thread()
+        self.__started   = threading.Event()
+        self.__threadDmc = threading.Thread()
+        self.__threadSml = threading.Thread()
         self.isDownload = False
+        self.isDump = False
+
+    def getInfo( self, smUrl ):
+
+        #動画ページのhtmlを取得
+        resSm = requests.post( smUrl )
+
+        #パースしてapi情報を取得
+        soup = bs4.BeautifulSoup( resSm.content, "html.parser" )
+        js_i_w_data = soup.find_all( id = "js-initial-watch-data" )
+
+        #data-api-dataを取得
+        api_data = json.loads( js_i_w_data[0].get("data-api-data") )
+
+        #データ取得
+        return { "title":api_data["video"]["title"], "url":smUrl, "thum":api_data["video"]["thumbnailURL"] } 
 
     def getVideo( self, smUrl ):
 
         #キャッシュ初期化
-        os.remove( "data.mp4" )
+        if os.path.exists( "data.mp4" ):
+            os.remove( "data.mp4" )
         
         #動画ページのhtmlを取得
         resSm = requests.post( smUrl )
@@ -33,28 +52,24 @@ class nico2py():
         api_data = json.loads( js_i_w_data[0].get("data-api-data") )
         self.__dumpJson( "dl_datas/data-api-data.json", api_data )
 
-        self.threadDmc = threading.Thread( target=self.__sessionDmc )
-        self.threadSml = threading.Thread( target=self.__sessionSmile, args=( api_data, cookies ) )
+        self.__threadDmc = threading.Thread( target=self.__sessionDmc, args=( api_data, 0 ) )
+        self.__threadSml = threading.Thread( target=self.__sessionSmile, args=( api_data, cookies ) )
 
         #smileサーバー(旧方式)かdmcサーバー(新方式)を選択
         if api_data["video"]["dmcInfo"] == None:
             print("smile")
-            self.threadSml.start()
+            self.__threadSml.start()
         else:
             print("dmc")
-            self.threadDmc.start()
+            self.__threadDmc.start()
         
         #読み込む分が生成される待ち時間
         time.sleep( 3 )
 
         return "data.mp4"
             
-    def __sessionDmc( self ):
+    def __sessionDmc( self, api_data, dummy ):
         
-        fp = open( "dl_datas/data-api-data.json","r" )
-        api_data = json.load(fp)
-        fp.close()
-
         #session雛形を読み込み
         fp = open("session_proto.json","r")
         session_proto = json.load(fp)
@@ -62,7 +77,7 @@ class nico2py():
 
         #session-api
         self.__dumpJson( "dl_datas/session_api.json", api_data["video"]["dmcInfo"]["session_api"] )
-        session_api = self.__loadJson( "dl_datas/session_api.json" )
+        session_api = api_data["video"]["dmcInfo"]["session_api"]
 
         #リクエスト作成
         sessionReq = self.__setSession( session_proto, session_api )
@@ -80,7 +95,7 @@ class nico2py():
 
         if session_res.status_code != 201:
             print( session_res.text )
-            exit()
+            return
 
         #masterm3u8取得
         rtsAddres = dmc_session_res["data"]["session"]["content_uri"]
@@ -110,8 +125,9 @@ class nico2py():
 
         #playlistsを取得
         resPlayList = requests.get(url)
-        fp = open( "dl_datas/playLists.m3u8", "w" )
-        fp.write(resPlayList.text)
+        if self.isDump:
+            with open( "dl_datas/playLists.m3u8", "w" ) as fp:
+                fp.write(resPlayList.text)
 
         #tsを取得
         basePath = ""
@@ -125,20 +141,24 @@ class nico2py():
         tsDatas = m3u8.loads(resPlayList.text)
         tsDatas.base_path = basePath + "1/ts"
         
-        fp = open("data.mp4","wb+")
-
         self.isDownload = True
+        
+        with open("data.mp4","wb+") as fp:
 
-        for tsUrl in tsDatas.segments:
+            i = 0
+            
+            for tsUrl in tsDatas.segments:
+                i += 1
+                res = requests.get( tsUrl.uri )
+                data = res.content
+                print( "{0} / {1} : {2} bytes".format( i, len(tsDatas.segments), sys.getsizeof(res) ) )
 
-            print(str(tsUrl.uri))
-            fp.write( requests.get(tsUrl.uri).content )
+                fp.write( data )
 
-            if self.isDownload == False:
-                break
-
+                if self.isDownload == False:
+                    break
+                    
         nico2py.isDownload = False
-        fp.close()
 
     def __sessionSmile( self, api_data, cookie ):
         
@@ -175,9 +195,10 @@ class nico2py():
         fp.close()
 
     def __dumpJson( self, file, jdata ):
-        fp = open( file, "w" )
-        json.dump( jdata, fp, indent=4 )
-        fp.close()
+
+        if self.isDump:
+            with open( file, "w" ) as fp:
+                json.dump( jdata, fp, indent=4 )
 
     def __loadJson( self, file ):
         fp = open( file, "r" )
@@ -230,10 +251,10 @@ class nico2py():
     def __del__( self ):
 
         #ダウンロードスレッドを終了
-        self.started.set()
+        self.__started.set()
         
-        if self.threadSml.isAlive == True:
-            self.threadSml.join()
+        if self.__threadSml.isAlive == True:
+            self.__threadSml.join()
 
-        if self.threadDmc.isAlive == True:
-            self.threadDmc.join()
+        if self.__threadDmc.isAlive == True:
+            self.__threadDmc.join()
