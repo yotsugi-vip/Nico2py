@@ -37,8 +37,8 @@ class nico2py():
     def getVideo( self, smUrl ):
 
         #キャッシュ初期化
-        if os.path.exists( "data.mp4" ):
-            os.remove( "data.mp4" )
+        if os.path.exists( "contents/cache.mp4" ):
+            os.remove( "contents/cache.mp4" )
         
         #動画ページのhtmlを取得
         resSm = requests.post( smUrl )
@@ -50,7 +50,7 @@ class nico2py():
 
         #data-api-dataを取得
         api_data = json.loads( js_i_w_data[0].get("data-api-data") )
-        self.__dumpJson( "dl_datas/data-api-data.json", api_data )
+        self.__dumpJson( "contents/data-api-data.json", api_data )
 
         self.__threadDmc = threading.Thread( target=self.__sessionDmc, args=( api_data, 0 ) )
         self.__threadSml = threading.Thread( target=self.__sessionSmile, args=( api_data, cookies ) )
@@ -66,17 +66,17 @@ class nico2py():
         #読み込む分が生成される待ち時間
         time.sleep( 3 )
 
-        return "data.mp4"
+        return "contents/cache.mp4"
             
     def __sessionDmc( self, api_data, dummy ):
         
         #session雛形を読み込み
-        fp = open("session_proto.json","r")
+        fp = open("contents/session_proto.json","r")
         session_proto = json.load(fp)
         fp.close()
 
         #session-api
-        self.__dumpJson( "dl_datas/session_api.json", api_data["video"]["dmcInfo"]["session_api"] )
+        self.__dumpJson( "contents/session_api.json", api_data["video"]["dmcInfo"]["session_api"] )
         session_api = api_data["video"]["dmcInfo"]["session_api"]
 
         #リクエスト作成
@@ -91,7 +91,7 @@ class nico2py():
         session_res:requests.Response = req.post( dmc_adress, json=sessionReq )
 
         dmc_session_res = json.loads(session_res.content)
-        self.__dumpJson( "dl_datas/dmcSessionRes.json", dmc_session_res )
+        self.__dumpJson( "contents/dmcSessionRes.json", dmc_session_res )
 
         if session_res.status_code != 201:
             print( session_res.text )
@@ -100,14 +100,14 @@ class nico2py():
         #masterm3u8取得
         rtsAddres = dmc_session_res["data"]["session"]["content_uri"]
         streamData = requests.get(rtsAddres)
-        fp = open("dl_datas/master_list.m3u8","w")
+        fp = open("contents/master_list.m3u8","w")
         fp.write(streamData.text)
         fp.close()
 
         #playlist用urlを整形
         split_data = self.__splitUrl( rtsAddres )
 
-        fp = open("dl_datas/master_list.m3u8","r")
+        fp = open("contents/master_list.m3u8","r")
         pl_data = fp.read().split("\n")
         pl_data.remove("")
         pl_data.reverse()
@@ -126,7 +126,7 @@ class nico2py():
         #playlistsを取得
         resPlayList = requests.get(url)
         if self.isDump:
-            with open( "dl_datas/playLists.m3u8", "w" ) as fp:
+            with open( "contents/playLists.m3u8", "w" ) as fp:
                 fp.write(resPlayList.text)
 
         #tsを取得
@@ -143,7 +143,7 @@ class nico2py():
         
         self.isDownload = True
         
-        with open("data.mp4","wb+") as fp:
+        with open("contents/cache.mp4","wb+") as fp:
 
             i = 0
             
@@ -162,7 +162,7 @@ class nico2py():
 
     def __sessionSmile( self, api_data, cookie ):
         
-        fp = open("data.mp4","wb+")
+        fp = open("contents/cache.mp4","wb+")
 
         #Smileサーバー設定
         smileUrl = api_data["video"]["smileInfo"]["url"]         
@@ -173,7 +173,7 @@ class nico2py():
         rhead["Range"] = "bytes=0-10"
    
         #1回目データ取得
-        fp = open("data.mp4","wb+")
+        fp = open("contents/cache.mp4","wb+")
         res:requests.Response = requests.get( smileUrl, headers=rhead, cookies=cookie )
 
         #全体サイズ取得
