@@ -81,14 +81,13 @@ class nico2py():
 
         #リクエスト作成
         sessionReq = self.__setSession( session_proto, session_api )
-
-        #リクエスト送信
         req = requests.Session()
 
         #dmcアドレスを設定
         dmc_adress = session_api["urls"][0]["url"] + "?_format=json"
-
-        session_res:requests.Response = req.post( dmc_adress, json=sessionReq )
+        reqHead = dict()
+        reqHead["options"] = "post"
+        session_res:requests.Response = req.post( dmc_adress, json=sessionReq, headers=reqHead )
 
         dmc_session_res = json.loads(session_res.content)
         self.__dumpJson( "contents/dmcSessionRes.json", dmc_session_res )
@@ -128,7 +127,7 @@ class nico2py():
         if self.isDump:
             with open( "contents/playLists.m3u8", "w" ) as fp:
                 fp.write(resPlayList.text)
-
+        
         #tsを取得
         basePath = ""
         for i in range( len(split_data) - 1 ):
@@ -137,24 +136,29 @@ class nico2py():
             else:
                 basePath += split_data[i] + "/"
 
-        
+
         tsDatas = m3u8.loads(resPlayList.text)
         tsDatas.base_path = basePath + "1/ts"
         
         self.isDownload = True
-        
+        heatBeat = time.time()
+
         with open("contents/cache.mp4","wb+") as fp:
 
             i = 0
-            
             for tsUrl in tsDatas.segments:
+
                 i += 1
                 res = requests.get( tsUrl.uri )
-                data = res.content
-                print( "{0} / {1} : {2} bytes".format( i, len(tsDatas.segments), sys.getsizeof(res) ) )
+                print( "{0} / {1} : {2} bytes lifetime : {3}".format( i, len(tsDatas.segments), sys.getsizeof(res), (time.time() - heatBeat ) ) )
+                fp.write( res.content )
 
-                fp.write( data )
-
+                # heartbeat
+                if (time.time() - heatBeat) >= 120:
+                    session_res:requests.Response = req.post( dmc_adress, json=sessionReq)
+                    heatBeat = time.time()
+                    print("hearBeat!")
+        
                 if self.isDownload == False:
                     break
                     
@@ -171,7 +175,7 @@ class nico2py():
         rhead = dict()
         addSize = 100000
         rhead["Range"] = "bytes=0-10"
-   
+        rhead["options"] = "post"
         #1回目データ取得
         fp = open("contents/cache.mp4","wb+")
         res:requests.Response = requests.get( smileUrl, headers=rhead, cookies=cookie )
