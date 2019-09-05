@@ -57,7 +57,6 @@ class nico2py():
         #data-api-dataを取得
         api_data = json.loads( js_i_w_data[0].get("data-api-data") )
         self.__dumpJson( "contents/data-api-data.json", api_data )
-
         self.__threadDmc = threading.Thread( target=self.__sessionDmc, args=( api_data, 0 ) )
         self.__threadSml = threading.Thread( target=self.__sessionSmile, args=( api_data, cookies ) )
 
@@ -223,15 +222,13 @@ class nico2py():
         fp.close()
 
     def __dumpJson( self, file, jdata ):
-
         if self.isDump:
             with open( file, "w" ) as fp:
                 json.dump( jdata, fp, indent=4 )
 
     def __loadJson( self, file ):
-        fp = open( file, "r" )
-        ret = json.load(fp)
-        fp.close()
+        with open( file, "r" ) as fp:
+            ret = json.load(fp)
         return ret
 
     def __setSession( self, proto, data ):
