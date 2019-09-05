@@ -286,7 +286,3 @@ class nico2py():
 
         if self.__threadDmc.isAlive == True:
             self.__threadDmc.join()
-
-n = nico2py()
-n.isDump = True
-n.getVideo("https://www.nicovideo.jp/watch/sm500873")
