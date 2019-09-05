@@ -1,12 +1,13 @@
-import requests
 import json
-import bs4
-import m3u8
-import threading
-import time
 import os
 import sys
+import threading
 import time
+
+import bs4
+import m3u8
+import requests
+
 
 class nico2py():
 
@@ -16,10 +17,13 @@ class nico2py():
         self.__started   = threading.Event()
         self.__threadDmc = threading.Thread()
         self.__threadSml = threading.Thread()
+        self.__smUrl = str()
         self.isDownload = False
         self.isDump = False
 
     def getInfo( self, smUrl ):
+
+        self.__smUrl = smUrl
 
         #動画ページのhtmlを取得
         resSm = requests.post( smUrl )
@@ -35,6 +39,8 @@ class nico2py():
         return { "title":api_data["video"]["title"], "url":smUrl, "thum":api_data["video"]["thumbnailURL"] } 
 
     def getVideo( self, smUrl ):
+
+        self.__smUrl = smUrl   
 
         #キャッシュ初期化
         if os.path.exists( "contents/cache.mp4" ):
@@ -71,9 +77,8 @@ class nico2py():
     def __sessionDmc( self, api_data, dummy ):
         
         #session雛形を読み込み
-        fp = open("contents/session_proto.json","r")
-        session_proto = json.load(fp)
-        fp.close()
+        with open("contents/session_proto.json","r") as fp:
+            session_proto = json.load(fp)
 
         #session-api
         self.__dumpJson( "contents/session_api.json", api_data["video"]["dmcInfo"]["session_api"] )
@@ -85,9 +90,7 @@ class nico2py():
 
         #dmcアドレスを設定
         dmc_adress = session_api["urls"][0]["url"] + "?_format=json"
-        reqHead = dict()
-        reqHead["options"] = "post"
-        session_res:requests.Response = req.post( dmc_adress, json=sessionReq, headers=reqHead )
+        session_res:requests.Response = req.post( dmc_adress, json=sessionReq )
 
         dmc_session_res = json.loads(session_res.content)
         self.__dumpJson( "contents/dmcSessionRes.json", dmc_session_res )
@@ -99,18 +102,17 @@ class nico2py():
         #masterm3u8取得
         rtsAddres = dmc_session_res["data"]["session"]["content_uri"]
         streamData = requests.get(rtsAddres)
-        fp = open("contents/master_list.m3u8","w")
-        fp.write(streamData.text)
-        fp.close()
+
+        with open("contents/master_list.m3u8","w") as fp:
+            fp.write(streamData.text)
 
         #playlist用urlを整形
         split_data = self.__splitUrl( rtsAddres )
 
-        fp = open("contents/master_list.m3u8","r")
-        pl_data = fp.read().split("\n")
-        pl_data.remove("")
-        pl_data.reverse()
-        fp.close()
+        with open("contents/master_list.m3u8","r") as fp:
+            pl_data = fp.read().split("\n")
+            pl_data.remove("")
+            pl_data.reverse()
 
         url = ""
 
@@ -143,6 +145,30 @@ class nico2py():
         self.isDownload = True
         heatBeat = time.time()
 
+        params = dict()
+        params["_format"] = "json"
+        params["_method"] = "PUT"
+
+        headers = dict()
+        headers["Access-Control-Request-Headers"] = "content-type"
+        headers["Access-Control-Request-Method"] = "POST"
+        headers["Origin"] = "https://www.nicovideo.jp"
+        headers["Referer"] = self.__smUrl
+        headers["Sec-Fetch-Mode"] = "no-cors"
+
+        hb_adress = "{0}/{1}".format( session_api["urls"][0]["url"], dmc_session_res["data"]["session"]["id"] )
+        res :requests.Response= requests.options( hb_adress, headers=headers,params=params )
+        print(res)
+        print(res.request.headers)
+        print(res.headers)
+
+        headers = dict()
+        headers["Accept"] = "aplication/json"
+        headers["Content-Type"] = "aplication/json"
+        headers["Origin"] = "https://www.nicovideo.jp"
+        headers["Referer"] = self.__smUrl
+        headers["Sec-Fetch-Mode"] = "cors"
+        
         with open("contents/cache.mp4","wb+") as fp:
 
             i = 0
@@ -154,11 +180,10 @@ class nico2py():
                 fp.write( res.content )
 
                 # heartbeat
-                if (time.time() - heatBeat) >= 120:
-                    session_res:requests.Response = req.post( dmc_adress, json=sessionReq)
+                if (time.time() - heatBeat) >= 110:
+                    session_res:requests.Response = requests.post( hb_adress, json=dmc_session_res["data"], headers=headers, params=params )
                     heatBeat = time.time()
-                    print("hearBeat!")
-        
+
                 if self.isDownload == False:
                     break
                     
@@ -166,8 +191,6 @@ class nico2py():
 
     def __sessionSmile( self, api_data, cookie ):
         
-        fp = open("contents/cache.mp4","wb+")
-
         #Smileサーバー設定
         smileUrl = api_data["video"]["smileInfo"]["url"]         
         
@@ -176,6 +199,7 @@ class nico2py():
         addSize = 100000
         rhead["Range"] = "bytes=0-10"
         rhead["options"] = "post"
+        
         #1回目データ取得
         fp = open("contents/cache.mp4","wb+")
         res:requests.Response = requests.get( smileUrl, headers=rhead, cookies=cookie )
@@ -262,3 +286,7 @@ class nico2py():
 
         if self.__threadDmc.isAlive == True:
             self.__threadDmc.join()
+
+n = nico2py()
+n.isDump = True
+n.getVideo("https://www.nicovideo.jp/watch/sm500873")
