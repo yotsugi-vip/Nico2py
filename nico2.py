@@ -36,7 +36,7 @@ class nico2py():
         api_data = json.loads( js_i_w_data[0].get("data-api-data") )
 
         #データ取得
-        return { "title":api_data["video"]["title"], "url":smUrl, "thum":api_data["video"]["thumbnailURL"] } 
+        return { "title":api_data["video"]["title"], "url":smUrl, "thum":api_data["video"]["thumbnailURL"], "duration":api_data["video"]["duration"] } 
 
     def getVideo( self, smUrl ):
 
