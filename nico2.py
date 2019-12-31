@@ -45,7 +45,9 @@ class nico2py():
         #キャッシュ初期化
         if os.path.exists( "contents/cache.mp4" ):
             os.remove( "contents/cache.mp4" )
-        
+        else:
+            with open( "contents/cache.mp4","w"):pass
+            
         #動画ページのhtmlを取得
         resSm = requests.post( smUrl )
         cookies = resSm.cookies.get_dict()
